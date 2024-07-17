@@ -1,5 +1,6 @@
 import re
 import os
+import copy
 import pandas as pd
 import numpy as np
 import pymorphy3
@@ -18,14 +19,30 @@ class RegExpsLena(InitialRegsDates):
     def func_lemm(self, x):
         return self.morph.normal_forms(x)[0]
     
-    def func_fio(self, x):
-        return [[self.names[i], x] for i in list(self.names.keys()) if i in str(self.morph.tag(x)[0])]
+    def func_fio(self, sent, brackets):
+        output_di = {"рекрутер": [], "руководитель": [], "кандидат": []}
+        for type_human, left, right in brackets:
+            output = [word for word in sent[left: right] if 'Surn' in str(self.morph.tag(word)[0])]
+            output_di.update({self.func_lemm(type_human): output})
+        return output_di
 
     def sent2normal_form(self, sent, reg=r"[a-zа-я-/]+", drop_wrods=['кандидат'], dontMorph=['оффер']):
-        sent = sent.lower();
+        sent = sent.lower()
         sent = sent.replace("ё", "е")
+        prefix_reg = r"(?:рекрутер[а-я]{0,2}|руководител[а-я]{0,2}|кандидат[а-я]{0,2})"
+        found_key_words = re.compile(prefix_reg).findall(sent)
         sent = re.compile(reg).findall(sent)
-        fios = [self.func_fio(word) for word in sent]
+        found_key_words_index = sorted([[i, sent.index(i), len(sent)]  for i in found_key_words], key=lambda x: x[1])
+        found_key_words_index_brackets = []
+        if len(found_key_words_index) > 1:
+            for i in range(len(found_key_words_index) - 1):
+                val = copy.copy(found_key_words_index[i])
+                val[-1] = found_key_words_index[i + 1][1]
+                found_key_words_index_brackets.append(val)
+            found_key_words_index_brackets.append(found_key_words_index[-1])
+        print("found_key_words_index_brackets: ", found_key_words_index_brackets)
+        fios = self.func_fio(sent, found_key_words_index_brackets)
+        print("fios: ", fios)
         sent = [self.func_lemm(i) if i not in dontMorph else i for i in sent]
         sent = list(filter(lambda word: word not in drop_wrods, sent))
         sent = " ".join(sent)
@@ -90,7 +107,6 @@ class RegExpsLena(InitialRegsDates):
         self.sent = sent
         dates = self.extract_dates(sent)
         sent, fio = self.sent2normal_form(sent)
-        fio = list(filter(None, fio))
         extracted = {}
         for subner in key_words:
             extracted.update({subner: {}})
