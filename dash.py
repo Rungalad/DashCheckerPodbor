@@ -10,6 +10,8 @@ from typing import Dict, List, Set
 from reg_extractor_Lena import RegExpsLena
 print("Libs loaded!")
 
+# https://stackoverflow.com/questions/75410059/how-to-log-user-activity-in-a-streamlit-app
+
 global history
 history = dict()
 
@@ -41,9 +43,6 @@ def save_log(update_, filename="log.pkl"):
 def load_key_words():
     morph = pymorphy3.MorphAnalyzer()
     class_ecz = RegExpsLena(morph)
-    # old version from xls file
-    # key_words = class_ecz.get_regexps(file_path)
-    # key_words = pickle.load(open(file_path, 'rb'))
     return class_ecz #, key_words
 
 def get_ui(class_ecz): # key_words
@@ -53,12 +52,10 @@ def get_ui(class_ecz): # key_words
     
     st.header("Извлекаем сущности")
     st.subheader("Введите запрос")
-    probaText = "кандидаты из кадровых агентств и инсты  с запланированными интервью за зиму 2023 для Иванова и Захаровой отклоненные из-за некомпетентности"
+    probaText = "кандидаты Иванов и Жирков из кадровых агентств и инсты с запланированными интервью за зиму 2023 для рекрутеров Бурлакова и Захаровой отклоненные из-за некомпетентности"
     title = st.text_input("Ваш запрос:", probaText)
     values, morphed, fio_get, dates_gets = class_ecz.extractNERS(title, key_words)
     st.markdown(":green[Нормализованный запрос -]" + " " + morphed)
-    if len(fio_get) > 0:
-        fio_get = [i[0][1].capitalize() for i in fio_get]
     short_values = {i: list(values[i].keys()) for i in values}
     short_phrases = {i: list(values[i].values()) for i in values}
     
@@ -95,25 +92,34 @@ def get_ui(class_ecz): # key_words
         )
         output1.update({"date": date})
     with cols[1]:
-        name = st.text_input("Выделенные ФИО:", ", ".join(fio_get))
-        output1.update({"name": name})
+        funnc_join = lambda x: ", ".join([i.capitalize() for i in x])
+        name_rec = st.text_input("Выделенные фамилии - рекрутер:", funnc_join(fio_get["рекрутер"]))
+        output1.update({"Выделенные фамилии - рекрутер": name_rec})
+        name_ruc = st.text_input("Выделенные фамилии - руководитель:", funnc_join(fio_get["руководитель"]))
+        output1.update({"Выделенные фамилии - руководитель": name_ruc})
+        name_can = st.text_input("Выделенные фамилии - кандидат:", funnc_join(fio_get["кандидат"]))
+        output1.update({"Выделенные фамилии - кандидат": name_can})
         
     cols = st.columns(2, gap='large')
     with cols[0]:
         if st.button("Зафиксировать сущности"):
             history.update({title + "_origin": output1})
-            # print(history)
             save_log(history)
     with cols[1]:
         if st.button("Исправил(-а) сущности"):
             history.update({title + "_fixed": output1})
-            # print(history)
             save_log(history)
+            
+    # log saving
     try:
-        shp = len(pickle.load(open(log_file, 'rb')))
+        to_save_history = pickle.load(open(log_file, 'rb'))
+        shp = len(to_save_history)
+        to_save_history = pd.DataFrame(to_save_history).transpose().to_csv().encode("utf-8")
+        st.download_button('Скачать лог', data=to_save_history, file_name="Log.csv", mime="text/csv")
         st.write(f"Размер лога: {shp}")
     except FileNotFoundError:
         st.write("Размер лога: 0")
+        
     # dataframes widget
     st.subheader("Ключевые фразы (Им.п., м.р., ед.число)")
     keys = list(key_words.keys())
@@ -135,6 +141,17 @@ def get_ui(class_ecz): # key_words
             di_save.update({keys[cnt]: di})
             cnt = cnt + 1
         pickle.dump(di_save, open(file_path, 'wb'))
+    
+    # to download 
+    to_download = pd.DataFrame()
+    cnt = 0
+    for deditor in deditors:
+        deditor_cp = copy.copy(deditor)
+        deditor_cp["type"] = keys[cnt]
+        cnt = cnt + 1
+        to_download = pd.concat([to_download, deditor_cp], axis=0)
+    to_download = pd.DataFrame(to_download).reset_index(drop=True).to_csv().encode("utf-8")
+    st.download_button('Скачать таблицу ключевых фраз', data=to_download, file_name="KeyPhrases.csv", mime="text/csv")
         
     
 def main():
