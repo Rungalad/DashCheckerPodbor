@@ -16,6 +16,7 @@ history = dict()
 # old version from xls file
 # file_path = "LenaZenkoDash/n_grams.xls"
 file_path = "LenaZenkoDash/key_words.pkl"
+log_file = r"Log/log.pkl"
 
 def format_df_from_key_words(key_words):
     table = {i: list(key_words[i].items()) for i in key_words}
@@ -30,11 +31,11 @@ def save_log(update_, filename="log.pkl"):
     if "Log" not in os.listdir():
         os.mkdir("Log")
     if filename not in os.listdir("Log"):
-        pickle.dump(update_, open(r"Log/log.pkl", 'wb'))
+        pickle.dump(update_, open(log_file, 'wb'))
     else:
-        exist = pickle.load(open(r"Log/log.pkl", 'rb'))
+        exist = pickle.load(open(log_file, 'rb'))
         exist.update(update_)
-        pickle.dump(exist, open(r"Log/log.pkl", 'wb'))
+        pickle.dump(exist, open(log_file, 'wb'))
 
 @st.cache_data
 def load_key_words():
@@ -108,7 +109,11 @@ def get_ui(class_ecz): # key_words
             history.update({title + "_fixed": output1})
             # print(history)
             save_log(history)
-     
+    try:
+        shp = len(pickle.load(open(log_file, 'rb')))
+        st.write(f"Размер лога: {shp}")
+    except FileNotFoundError:
+        st.write("Размер лога: 0")
     # dataframes widget
     st.subheader("Ключевые фразы (Им.п., м.р., ед.число)")
     keys = list(key_words.keys())
